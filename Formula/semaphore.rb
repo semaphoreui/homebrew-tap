@@ -29,7 +29,6 @@ class Semaphore < Formula
     ENV["CGO_ENABLED"] = "0"
     commit = build.head? ? Utils.git_short_head : "homebrew"
     ldflags = %W[
-      -s -w
       -X github.com/semaphoreui/semaphore/util.Ver=#{version}
       -X github.com/semaphoreui/semaphore/util.Commit=#{commit}
       -X github.com/semaphoreui/semaphore/util.Date=#{time.to_i}
@@ -109,17 +108,16 @@ class Semaphore < Formula
   test do
     assert_match version.to_s, shell_output("#{bin}/semaphore version")
 
-    port = free_port
     config = testpath/"etc/config.json"
     system libexec/"semaphore-init-config", config, testpath/"data"
-    config.write config.read.sub(":3000", ":#{port}")
     assert_equal "sqlite", JSON.parse(config.read)["dialect"]
 
     system bin/"semaphore", "user", "add", "--admin", "--login", "admin", "--name", "Admin",
            "--email", "admin@example.com", "--password", "password", "--config", config
     assert_match "admin", shell_output("#{bin}/semaphore user list --config #{config}")
 
-    pid = spawn bin/"semaphore", "server", "--config", config
+    port = free_port
+    pid = spawn({ "SEMAPHORE_PORT" => port.to_s }, bin/"semaphore", "server", "--config", config)
     begin
       sleep 5
       assert_equal "pong", shell_output("curl -s http://127.0.0.1:#{port}/api/ping")
